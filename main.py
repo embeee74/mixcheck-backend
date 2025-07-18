@@ -11,7 +11,7 @@ app = FastAPI()
 # CORS settings to allow frontend calls
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://altguitar.com"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
