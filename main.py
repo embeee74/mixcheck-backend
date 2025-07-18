@@ -1,5 +1,6 @@
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import librosa
 import numpy as np
 import io
@@ -8,14 +9,19 @@ import soundfile as sf
 
 app = FastAPI()
 
-# CORS settings to allow frontend calls
+# CORS setup to accept requests from altguitar.com
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://altguitar.com"]
+    allow_origins=["https://altguitar.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Optional CORS preflight handler
+@app.options("/analyze")
+async def preflight(request: Request):
+    return JSONResponse(status_code=200, content={"message": "CORS preflight OK"})
 
 @app.post("/analyze")
 async def analyze(
