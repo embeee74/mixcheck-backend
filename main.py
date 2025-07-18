@@ -8,7 +8,7 @@ import soundfile as sf
 
 app = FastAPI()
 
-# Allow frontend requests
+# CORS settings to allow frontend calls
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,43 +20,41 @@ app.add_middleware(
 @app.post("/analyze")
 async def analyze(
     file: UploadFile = File(...),
-    genre: str = Form(...),
-    daw: str = Form(...)
+    genre: str = Form("Unknown"),
+    daw: str = Form("Unknown")
 ):
     try:
-        print(f"⏺️ Received file: {file.filename}, type: {file.content_type}")
+        print(f"📥 File received: {file.filename} | Type: {file.content_type}")
 
-        # Load file into memory
         contents = await file.read()
-        audio_data = io.BytesIO(contents)
+        audio_buffer = io.BytesIO(contents)
 
-        # Try primary decode method
+        # Attempt to decode with librosa
         try:
-            y, sr = librosa.load(audio_data, sr=None, mono=True)
-        except Exception as decode_err:
-            print("⚠️ Librosa decode failed, trying fallback...")
-            audio_data.seek(0)
+            y, sr = librosa.load(audio_buffer, sr=None, mono=True)
+            print("✅ Audio decoded with librosa.")
+        except Exception:
+            print("⚠️ Librosa failed, trying soundfile fallback...")
+            audio_buffer.seek(0)
             try:
-                y, sr = sf.read(audio_data)
-                if len(y.shape) > 1:  # Convert stereo to mono
+                y, sr = sf.read(audio_buffer)
+                if y.ndim > 1:
                     y = np.mean(y, axis=1)
-            except Exception as fallback_err:
-                print("❌ Fallback decode failed.")
+                print("✅ Audio decoded with soundfile.")
+            except Exception:
+                print("❌ Both decode attempts failed.")
                 traceback.print_exc()
-                return {"error": "Failed to decode audio. Please try a different file format (WAV recommended)."}
+                return {"error": "Unable to process audio. Try WAV or MP3 under 5 mins."}
 
-        # Analyze audio
         duration = librosa.get_duration(y=y, sr=sr)
-        print(f"✅ Loaded audio, duration: {duration:.2f} sec")
-
         if duration > 300:
             return {"error": "Track is too long. Please upload a file under 5 minutes."}
 
-        rms = np.mean(librosa.feature.rms(y=y))
+        rms = float(np.mean(librosa.feature.rms(y=y)))
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-        centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+        centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)))
 
-        print(f"🎵 Analysis complete: RMS={rms}, Tempo={tempo}, Centroid={centroid}")
+        print(f"🎚 Analysis complete — Duration: {duration:.2f}s | RMS: {rms:.4f} | Tempo: {tempo:.2f} BPM | Centroid: {centroid:.2f}")
 
         return {
             "duration_sec": round(duration, 2),
@@ -67,7 +65,8 @@ async def analyze(
             "daw": daw
         }
 
-    except Exception as e:
+    except Exception:
+        print("🔥 Unexpected backend error:")
         traceback.print_exc()
-        return {"error": f"Unexpected error: {str(e)}"}
+        return {"error": "Server error. Please try again later."}
 
